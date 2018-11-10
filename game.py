@@ -42,6 +42,8 @@ for i in range(9):
     sprite = pygame.transform.scale(sprite, (50, 50))
     animation.append(sprite)
 
+BLACK = (0, 0, 0)
+
 def get_from_db(select, from_, where=None, value=None, string=False):
     if where == None:
         sql = "select " + select + " from " + from_
@@ -76,14 +78,15 @@ def update(typed_word, word_to_type, coins, anim_num):
 
     font = pygame.font.SysFont("serif", 36)
     upgrade_font = pygame.font.SysFont("serif", 18)
+    stats_font = pygame.font.SysFont("serif", 24)
 
-    rendered_word_to_type = font.render(word_to_type, False, (0, 0, 0))
+    rendered_word_to_type = font.render(word_to_type, False, BLACK)
     window.blit(rendered_word_to_type, (50, 50))
 
-    rendered_typed_word = font.render(typed_word, False, (0, 0, 0))
+    rendered_typed_word = font.render(typed_word, False, BLACK)
     window.blit(rendered_typed_word, (50, 100))
 
-    rendered_coins = font.render(str(int(coins)), False, (0, 0, 0))
+    rendered_coins = font.render(str(int(coins)), False, BLACK)
     rendered_coins_rect = rendered_coins.get_rect()
     rendered_coins_rect.right = 450
     rendered_coins_rect.top = 5
@@ -92,9 +95,9 @@ def update(typed_word, word_to_type, coins, anim_num):
     window.blit(animation[anim_num], (window_size[1] - 50, 0))
 
     thead = [
-        upgrade_font.render("Upgrade", False, (0, 0, 0)),
-        upgrade_font.render("Status", False, (0, 0, 0)),
-        upgrade_font.render("Price", False, (0, 0, 0))
+        upgrade_font.render("Upgrade", False, BLACK),
+        upgrade_font.render("Status", False, BLACK),
+        upgrade_font.render("Price", False, BLACK)
     ]
     thead_rect = []
     for i in range(len(thead)):
@@ -110,7 +113,7 @@ def update(typed_word, word_to_type, coins, anim_num):
     for i in range(get_last_id(cursor)):
         upgrade = list(get_upgrade(i+1, cursor))
         for j in range(len(upgrade) - 1):
-            upgrade[j] = upgrade_font.render(str(upgrade[j+1]), False, (0, 0, 0))
+            upgrade[j] = upgrade_font.render(str(upgrade[j+1]), False, BLACK)
             upgrade_rect.append(upgrade[j].get_rect())
             upgrade_rect[j].top = 120 + i * 15
         upgrade_rect[0].right = 350
@@ -118,6 +121,17 @@ def update(typed_word, word_to_type, coins, anim_num):
         upgrade_rect[2].right = 490
         for j in range(len(upgrade) - 1):
             window.blit(upgrade[j], upgrade_rect[j])
+
+    rendered_price_per_word = stats_font.render("Price per word: " + str(price_per_word), False, BLACK)
+    rect = rendered_price_per_word.get_rect()
+    rect.left = 0
+    rect.top = 450
+    window.blit(rendered_price_per_word, rect)
+    rendered_words_per_minute = stats_font.render("Words per minute: " + str(words_per_minute), False, BLACK)
+    rect = rendered_words_per_minute.get_rect()
+    rect.right = 500
+    rect.top = 450
+    window.blit(rendered_words_per_minute, rect)
 
     pygame.display.update()
 
@@ -191,11 +205,11 @@ while run:
                     price = get_from_db(select="price", from_="Upgrades", where="Name", value="coder", string=True)
                     if coins >= price:
                         buy_upgrade("coder", coins, conn)
-                        conn.execute("update Player set words_per_minute=?", [words_per_minute + 5])
+                        conn.execute("update Player set words_per_minute=?", [words_per_minute + 3])
                         conn.commit()
-                        words_per_minute += 5
+                        words_per_minute += 3
         if event.type == increase_coins:
-            conn.execute("update Coins set Number=? where Number=?", [coins + words_per_minute / 60, coins])
+            conn.execute("update Coins set Number=? where Number=?", [coins + words_per_minute / 60 * price_per_word, coins])
             conn.commit()
 
     if typed:
