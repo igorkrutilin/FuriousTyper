@@ -7,6 +7,8 @@ import datetime
 pygame.init()
 
 conn = sqlite3.connect("database.db")
+
+# testing if all tables we need is in our database.db
 try:
     conn.execute("create table coins (number int)")
     conn.execute("insert into coins (number) values (0)")
@@ -36,13 +38,14 @@ window_size = [500, 500]
 window = pygame.display.set_mode(window_size)
 
 anim_location = "./sprites/coin/"
-animation = []
+animation = [] # array where we will store out animation sprites
+# filling array with sprites
 for i in range(9):
     sprite = pygame.image.load(anim_location + "goldCoin" + str(i+1) + ".png")
     sprite = pygame.transform.scale(sprite, (50, 50))
     animation.append(sprite)
 
-BLACK = (0, 0, 0)
+BLACK = (0, 0, 0) # black color constant
 
 def get_from_db(select, from_, where=None, value=None, string=False):
     if where == None:
@@ -73,27 +76,44 @@ def get_last_id(cursor):
     result = cursor.fetchall()
     return result[0][0]
 
+def buy_upgrade(upgrade, coins, conn):
+    curr_status = get_from_db(select="Status", from_="Upgrades", where="Name", value=upgrade, string=True)
+    # user cannot buy more than 25 upgrades of each type
+    if curr_status < 25:
+        status = curr_status + 1
+        curr_price = get_from_db(select="Price", from_="Upgrades", where="Name", value=upgrade, string=True)
+        conn.execute("update Coins set Number=? where Number=?", [coins - curr_price, coins])
+        price = round(curr_price * 1.5)
+        conn.execute("update Upgrades set Status=?, Price=? where Name=?", [str(status), str(price), str(upgrade)])
+        conn.commit()
+
 def update(typed_word, word_to_type, coins, anim_num):
     window.fill((255, 255, 255))
 
+    # declaring fonts we'll be using
     font = pygame.font.SysFont("serif", 36)
     upgrade_font = pygame.font.SysFont("serif", 18)
     stats_font = pygame.font.SysFont("serif", 24)
 
+    # displaying word to type
     rendered_word_to_type = font.render(word_to_type, False, BLACK)
     window.blit(rendered_word_to_type, (50, 50))
 
+    # displaying typed word
     rendered_typed_word = font.render(typed_word, False, BLACK)
     window.blit(rendered_typed_word, (50, 100))
 
+    # displaying coin number
     rendered_coins = font.render(str(int(coins)), False, BLACK)
     rendered_coins_rect = rendered_coins.get_rect()
     rendered_coins_rect.right = 450
     rendered_coins_rect.top = 5
     window.blit(rendered_coins, rendered_coins_rect)
 
+    # animating coin
     window.blit(animation[anim_num], (window_size[1] - 50, 0))
 
+    # displaying thead of (imaginary) upgrades table
     thead = [
         upgrade_font.render("Upgrade", False, BLACK),
         upgrade_font.render("Status", False, BLACK),
@@ -103,25 +123,28 @@ def update(typed_word, word_to_type, coins, anim_num):
     for i in range(len(thead)):
         thead_rect.append(thead[i].get_rect())
         thead_rect[i].top = 70
-    thead_rect[0].right = 350
-    thead_rect[1].right = 435
-    thead_rect[2].right = 490
+    thead_rect[0].right = 315
+    thead_rect[1].right = 420
+    thead_rect[2].right = 475
     for i in range(len(thead)):
         window.blit(thead[i], thead_rect[i])
 
+    # displaying body of (imaginary) upgrades table
     global upgrade_rect
     for i in range(get_last_id(cursor)):
         upgrade = list(get_upgrade(i+1, cursor))
         for j in range(len(upgrade) - 1):
-            upgrade[j] = upgrade_font.render(str(upgrade[j+1]), False, BLACK)
+            if upgrade[j+1] != upgrade[1] and upgrade[2] == 25:
+                upgrade[j] = upgrade_font.render("MAX", False, BLACK)
+            else:
+                upgrade[j] = upgrade_font.render(str(upgrade[j+1]), False, BLACK)
             upgrade_rect.append(upgrade[j].get_rect())
-            upgrade_rect[j].top = 120 + i * 15
-        upgrade_rect[0].right = 350
-        upgrade_rect[1].right = 435
-        upgrade_rect[2].right = 490
-        for j in range(len(upgrade) - 1):
+            upgrade_rect[j].top = 100 + i * 15
+            upgrade_rect[j].left = thead_rect[j].left
             window.blit(upgrade[j], upgrade_rect[j])
+            upgrade_pos.append([100 + j * 15, 100 + (j + 1) * 15]) # adding top and bottom of every upgrade into array
 
+    # displaying players price per word and words per minute count
     rendered_price_per_word = stats_font.render("Price per word: " + str(price_per_word), False, BLACK)
     rect = rendered_price_per_word.get_rect()
     rect.left = 0
@@ -135,17 +158,6 @@ def update(typed_word, word_to_type, coins, anim_num):
 
     pygame.display.update()
 
-def buy_upgrade(upgrade, coins, conn):
-    cursor.execute("select Status, Price from Upgrades where Name=?", [upgrade])
-    result = cursor.fetchall()
-    curr_status = result[0][0]
-    status = curr_status + 1
-    curr_price = result[0][1]
-    conn.execute("update Coins set Number=? where Number=?", [coins - curr_price, coins])
-    price = round(curr_price * 1.5)
-    conn.execute("update Upgrades set Status=?, Price=? where Name=?", [str(status), str(price), str(upgrade)])
-    conn.commit()
-
 typed_word = ""
 typed = True
 run = True
@@ -153,6 +165,7 @@ anim_num = 0
 clock = pygame.time.Clock()
 price_per_word = get_from_db(select="price_per_word", from_="Player")
 upgrade_rect = []
+upgrade_pos = [] # array with top and bottom of every upgrade
 words_per_minute = get_from_db(select="words_per_minute", from_="Player")
 increase_coins = USEREVENT + 1
 
@@ -165,7 +178,7 @@ coins = get_from_db(select="Number", from_="Coins")
 conn.execute("update Coins set Number=?", [coins + time_since_last_online * words_per_minute])
 conn.commit()
 
-pygame.time.set_timer(increase_coins, 1000)
+pygame.time.set_timer(increase_coins, 1000) # every second we call increase_coins event
 
 while run:
     clock.tick(10)
@@ -174,6 +187,7 @@ while run:
 
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
+            # quiting game and saving current time as users last onlien in databasae
             run = False
             now = now.strftime(format)
             conn.execute("update Player set last_online=?", [now])
@@ -185,23 +199,25 @@ while run:
             if event.key == pygame.K_BACKSPACE:
                 typed_word = typed_word[:-1]
         if event.type == pygame.MOUSEBUTTONDOWN:
+            # with clicks user can only buy upgrades
             mouse_pos = pygame.mouse.get_pos()
+            # checking which upgrade user wants to buy
             if mouse_pos[0] > upgrade_rect[0].left:
-                if mouse_pos[1] > 120 and mouse_pos[1] < 120 + 1 * 15:
+                if mouse_pos[1] > upgrade_pos[0][0] and mouse_pos[1] < upgrade_pos[0][1]:
                     price = get_from_db(select="price", from_="Upgrades", where="Name", value="price per word", string=True)
                     if coins >= price:
                         buy_upgrade("price per word", coins, conn)
                         conn.execute("update Player set price_per_word=?", [price_per_word + 1])
                         conn.commit()
                         price_per_word += 1
-                if mouse_pos[1] > 120 + 1 * 15 and mouse_pos[1] < 120 + 2 * 15:
+                if mouse_pos[1] > upgrade_pos[1][0] and mouse_pos[1] < upgrade_pos[1][1]:
                     price = get_from_db(select="price", from_="Upgrades", where="Name", value="slave typer", string=True)
                     if coins >= price:
                         buy_upgrade("slave typer", coins, conn)
                         conn.execute("update Player set words_per_minute=?", [words_per_minute + 1])
                         conn.commit()
                         words_per_minute += 1
-                if mouse_pos[1] > 120 + 2 * 15 and mouse_pos[1] < 120 + 3 * 15:
+                if mouse_pos[1] > upgrade_pos[2][0] and mouse_pos[1] < upgrade_pos[2][1]:
                     price = get_from_db(select="price", from_="Upgrades", where="Name", value="coder", string=True)
                     if coins >= price:
                         buy_upgrade("coder", coins, conn)
@@ -209,6 +225,7 @@ while run:
                         conn.commit()
                         words_per_minute += 3
         if event.type == increase_coins:
+            # checks how many coins player got in last second and adds it in the database
             conn.execute("update Coins set Number=? where Number=?", [coins + words_per_minute / 60 * price_per_word, coins])
             conn.commit()
 
@@ -220,8 +237,9 @@ while run:
         typed_word = ""
         conn.execute("update Coins set Number=? where Number=?", [coins + price_per_word, coins])
         conn.commit()
-        word_to_type = generate_word()
+        typed = True
 
+    # animating coin
     if anim_num < 8:
         anim_num += 1
     else:
